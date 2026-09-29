@@ -98,20 +98,51 @@ function speakFallback(text, btn){
   speechSynthesis.speak(u);
 }
 
+  // 구글 번역 음성 파일 재생 (주소를 순서대로 시도)
+  function playAudioFile(text, btn){
+    const q = encodeURIComponent(text);
+    const urls = [
+      'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=pt-BR&q=' + q,
+      'https://translate.google.com/translate_tts?ie=UTF-8&client=gtx&tl=pt-BR&q=' + q,
+      'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=pt&q=' + q
+    ];
+    let i = 0;
+    const finish = () => { btn.classList.remove('playing'); if (activeBtn === btn) activeBtn = null; };
+    const tryNext = () => {
+      if (activeBtn !== btn) return;
+      if (i >= urls.length){
+        audio = null; finish();
+        showNote('소리를 재생하지 못했습니다. 인터넷 연결과 무음 모드를 확인하거나, 크롬 또는 삼성 인터넷 브라우저에서 열어 주세요.');
+        return;
+      }
+      const a = new Audio();
+      a.referrerPolicy = 'no-referrer';
+      a.src = urls[i++];
+      audio = a;
+      a.onended = finish;
+      a.onerror = tryNext;
+      a.play().catch(tryNext);
+    };
+    tryNext();
+  }
+
   // 브라우저의 브라질 포르투갈어(pt-BR) 음성 사용
   function play(text, btn){
     const wasActive = (activeBtn === btn);
     stopAll();
     if (wasActive) return;
 
-    if (!('speechSynthesis' in window)){
-      showNote('이 브라우저에서는 음성 재생을 지원하지 않습니다.');
-      return;
-    }
-
     activeBtn = btn;
     btn.classList.add('playing');
     document.getElementById('note').style.display = 'none';
+
+    // 브라우저 음성 기능이 없거나(카톡 안 브라우저 등) 포르투갈어 음성이 없으면 구글 음성 파일로 재생
+    const hasTTS = ('speechSynthesis' in window) && typeof SpeechSynthesisUtterance !== 'undefined';
+    const hasPtVoice = hasTTS && speechSynthesis.getVoices().some(v => (v.lang || '').toLowerCase().replace('_','-').startsWith('pt'));
+    if (!hasTTS || (speechSynthesis.getVoices().length > 0 && !hasPtVoice)){
+      playAudioFile(text, btn);
+      return;
+    }
 
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'pt-BR';
